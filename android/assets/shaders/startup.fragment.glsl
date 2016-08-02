@@ -1,0 +1,1 @@
+#ifdef GL_ES#define LOWP lowpprecision mediump float;#else#define LOWP#endifvarying LOWP vec4 v_color;varying vec2 v_texCoords;uniform sampler2D u_texture;uniform float u_time;uniform vec2 u_resolution;void main(){    vec4 cord=gl_FragCoord;  gl_FragColor =vec4(1,cord.y/u_resolution.y,.2,1);}

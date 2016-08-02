@@ -27,6 +27,9 @@ public class FullQuadToy {
 
     public void resize(int width, int height) {
         viewport.update(width, height, true);
+        if(shader!=null)
+        shader.setUniformf("u_resolution",Gdx.graphics.getWidth(),Gdx.graphics.getHeight());
+
         batch.setProjectionMatrix(viewport.getCamera().combined);
         logger.info("Resize: "+width+" x "+height);
     }
@@ -44,8 +47,11 @@ public class FullQuadToy {
         if (texture != null) {
             batch.begin();
             if (shader != null) {
-                if (u_time >= 0)
+                shader.setUniformf("u_resolution",Gdx.graphics.getWidth(),Gdx.graphics.getHeight());
+                if (u_time >= 0) {
                     shader.setUniformf(u_time, time += Gdx.graphics.getDeltaTime());
+
+                }
                 if (u_cursor >= 0) {
                     final float cursorX = (float)Gdx.input.getX() / (float)Gdx.graphics.getWidth();
                     final float cursorY = 1f - ((float)Gdx.input.getY() / (float)Gdx.graphics.getHeight());
@@ -70,7 +76,9 @@ public class FullQuadToy {
         } else {
             logger.info("Shader compiled successfully");
         }
+        newShader.setUniformf("u_resolution",Gdx.graphics.getWidth(),Gdx.graphics.getHeight());
         batch.setShader(newShader);
+
         if (shader != null)
             shader.dispose();
         shader = newShader;

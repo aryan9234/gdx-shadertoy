@@ -1,18 +1,31 @@
 package com.xoppa.gdx.shadertoy;
 
-import com.badlogic.gdx.ApplicationAdapter;
-import com.badlogic.gdx.Gdx;
+import com.badlogic.gdx.*;
+import com.badlogic.gdx.files.FileHandle;
 import com.badlogic.gdx.graphics.FPSLogger;
 import com.badlogic.gdx.graphics.GL20;
 import com.badlogic.gdx.graphics.Texture;
 import com.badlogic.gdx.graphics.glutils.ShaderProgram;
 import com.badlogic.gdx.scenes.scene2d.Actor;
+import com.badlogic.gdx.scenes.scene2d.InputEvent;
 import com.badlogic.gdx.scenes.scene2d.Stage;
+import com.badlogic.gdx.scenes.scene2d.ui.Table;
 import com.badlogic.gdx.scenes.scene2d.utils.ChangeListener;
+import com.badlogic.gdx.scenes.scene2d.utils.ClickListener;
 import com.badlogic.gdx.utils.*;
 import com.badlogic.gdx.utils.StringBuilder;
 import com.badlogic.gdx.utils.viewport.ScreenViewport;
 import com.kotcrab.vis.ui.VisUI;
+import com.kotcrab.vis.ui.widget.Menu;
+import com.kotcrab.vis.ui.widget.MenuBar;
+import com.kotcrab.vis.ui.widget.MenuItem;
+import com.kotcrab.vis.ui.widget.file.FileChooser;
+import com.kotcrab.vis.ui.widget.file.FileChooserListener;
+import com.kotcrab.vis.ui.widget.file.FileTypeFilter;
+import com.kotcrab.vis.ui.widget.file.internal.PreferencesIO;
+import javafx.scene.input.KeyCode;
+
+import static com.badlogic.gdx.Gdx.files;
 
 public class GdxShaderToy extends ApplicationAdapter {
 	Stage stage;
@@ -28,14 +41,35 @@ public class GdxShaderToy extends ApplicationAdapter {
 
 	@Override
 	public void create () {
+		Pref.init();
 		ShaderProgram.pedantic = false;
 		startTimeMillis = TimeUtils.millis();
 		fpsStartTimer = TimeUtils.nanoTime();
-		img = new Texture(Gdx.files.internal("badlogic.jpg"));
+		img = new Texture(files.internal("badlogic.jpg"));
 		img.setWrap(Texture.TextureWrap.Repeat, Texture.TextureWrap.Repeat);
 		VisUI.load();
 		stage = new Stage(new ScreenViewport());
+
+		Table root=new Table();
+		root.setFillParent(true);
+		stage.addActor(root);
+
 		Gdx.input.setInputProcessor(stage);
+		stage.addListener(new ClickListener(){
+
+			@Override
+			public boolean keyDown(InputEvent event, int keycode) {
+
+				if(Gdx.app.getType()== Application.ApplicationType.Desktop){
+					if(Gdx.input.isKeyPressed(Input.Keys.CONTROL_LEFT)){
+						if(keycode== Input.Keys.S){
+							saveShaderOnFile();
+						}
+					}
+				}
+				return super.keyDown(event, keycode);
+			}
+		});
 
 		logger = new Logger("TEST", Logger.INFO) {
 			com.badlogic.gdx.utils.StringBuilder sb = new StringBuilder();
@@ -80,7 +114,7 @@ public class GdxShaderToy extends ApplicationAdapter {
 		float h = Gdx.graphics.getHeight();
 		float hw = w * 0.5f;
 		logWindow = new CollapsableTextWindow("Log", 0, 0, w, 100f);
-		stage.addActor(logWindow);
+		root.addActor(logWindow);
 
         final String defaultVS = "";
 		final String defaultFS = "";
@@ -88,11 +122,107 @@ public class GdxShaderToy extends ApplicationAdapter {
 		vsWindow = new CollapsableTextWindow("Vertex Shader", 0, 100f, hw, h - 100f);
 		vsWindow.setText(defaultVS);
 		vsWindow.addTextAreaListener(codeChangeListener);
-		stage.addActor(vsWindow);
+
+		FileHandle fileHandle=files.internal("shaders/default.vertex.glsl");
+		String array[]=fileHandle.readString().split("\n");
+		for (int j=0;j<array.length;j++){
+			vsWindow.addText(array[j]);
+		}
+
+		root.addActor(vsWindow);
 		fsWindow = new CollapsableTextWindow("Fragment Shader", hw, 100f, hw, h - 100f);
 		fsWindow.setText(defaultFS);
 		fsWindow.addTextAreaListener(codeChangeListener);
-		stage.addActor(fsWindow);
+
+		if(Pref.hasCurrentFile()){
+			fileHandle=new FileHandle(Pref.getCurrentFile());
+			if(fileHandle.exists()){
+				array=fileHandle.readString().split("\n");
+				for (int j=0;j<array.length;j++){
+					fsWindow.addText(array[j]);
+				}
+				fsWindow.getTitleLabel().setText(Pref.getCurrentFile());
+				toy.setShader(vsWindow.getText(), fsWindow.getText());
+			}else {
+				Pref.currentFileStatus(false);
+			}
+		}
+
+		root.addActor(fsWindow);
+		MenuBar menuBar=new MenuBar();
+		Menu info=new Menu("File");
+		menuBar.addMenu(info);
+		root.add(menuBar.getTable()).expandX().fillX().row();
+		root.add().expand().fill().row();
+
+		if(Gdx.app.getType()==Application.ApplicationType.Desktop) {
+
+			PreferencesIO.setDefaultPrefsName(Constants.PREF);
+			Gdx.app.getPreferences(Constants.PREF);
+
+			PreferencesIO preferencesIO=new PreferencesIO();
+
+			final FileChooser fileChooser = new FileChooser(FileChooser.Mode.OPEN);
+			fileChooser.setSize(w, h);
+
+			FileTypeFilter fileTypeFilter = new FileTypeFilter(true);
+			fileTypeFilter.addRule(".fragment.glsl", "glsl");
+
+			fileChooser.setFileTypeFilter(fileTypeFilter);
+			MenuItem open, save;
+			info.addItem(open = new MenuItem("Open"));
+			info.addItem(save = new MenuItem("Save"));
+
+			open.addListener(new ChangeListener() {
+				@Override
+				public void changed(ChangeEvent changeEvent, Actor actor) {
+
+					if(Pref.hasCurrentFile()){
+						FileHandle fileHandle1=new FileHandle(Pref.getCurrentFile());
+						if(fileHandle1.exists())
+						fileChooser.setDirectory(fileHandle1.file().getParent());
+					}
+					stage.addActor(fileChooser.fadeIn());
+				}
+			});
+
+			save.addListener(new ChangeListener() {
+				@Override
+				public void changed(ChangeEvent changeEvent, Actor actor) {
+					saveShaderOnFile();
+				}
+			});
+
+			fileChooser.setListener(new FileChooserListener() {
+				@Override
+				public void selected(Array<FileHandle> files) {
+					fsWindow.getTitleLabel().setText(files.get(0).toString());
+
+					FileHandle fileHandle=new FileHandle(files.get(0).toString());
+					Pref.saveCurrentFile(files.get(0).toString());
+					String fileExt=fileHandle.extension();
+					if(fileExt.equals("glsl")) {
+						fsWindow.setText(defaultFS);
+						String array[]=fileHandle.readString().split("\n");
+						for (int j=0;j<array.length;j++){
+							fsWindow.addText(array[j]);
+						}
+						toy.setShader(vsWindow.getText(), fsWindow.getText());
+					}
+				}
+
+				@Override
+				public void canceled() {
+				}
+			});
+		}else if(Gdx.app.getType()== Application.ApplicationType.Android){
+
+			array=files.internal("shaders/startup.fragment.glsl").readString().split("\n");
+			for (int j=0;j<array.length;j++){
+				fsWindow.addText(array[j]);
+			}
+			toy.setShader(vsWindow.getText(), fsWindow.getText());
+		}
 
 		//toy.setShader(defaultVS, defaultFS);
 	}
@@ -125,6 +255,14 @@ public class GdxShaderToy extends ApplicationAdapter {
 			fpsStartTimer = TimeUtils.nanoTime();
 		}
     }
+
+    private void saveShaderOnFile(){
+
+		if(Pref.hasCurrentFile()){
+			FileHandle fileHandle1=	new FileHandle(fsWindow.getTitleLabel().getText().toString());
+			fileHandle1.writeString(fsWindow.getText(),false);
+		}
+	}
 
 	@Override
 	public void dispose() {
